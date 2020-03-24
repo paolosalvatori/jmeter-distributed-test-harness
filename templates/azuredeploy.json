@@ -1,0 +1,765 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "allowedAddresses": {
+      "type": "array",
+      "defaultValue": ["*"],
+      "metadata": {
+        "description": "This array contains the list of public IP addresses that are allowed to connect to virtual machines via RDP."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for the resources."
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_B2s",
+      "metadata": {
+        "description": "Size for the Virtual Machine."
+      }
+    },
+    "vmImagePublisher": {
+      "defaultValue": "MicrosoftWindowsServer",
+      "type": "string",
+      "metadata": {
+        "description": "The publisher of the image reference used by the virtual machine"
+      }
+    },
+    "vmImageOffer": {
+      "defaultValue": "WindowsServer",
+      "type": "string",
+      "metadata": {
+        "description": "The offer of the image reference used by the virtual machine"
+      }
+    },
+    "vmImageSku": {
+      "defaultValue": "2019-Datacenter-with-Containers",
+      "type": "string",
+      "metadata": {
+        "description": "The sku of the image reference used by the virtual machine"
+      }
+    },
+    "vmImageVersion": {
+      "defaultValue": "latest",
+      "type": "string",
+      "metadata": {
+        "description": "The version of the image reference used by the virtual machine"
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Username for the Virtual Machine."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the Virtual Machine."
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "indigojmetervmdiag",
+      "metadata": {
+        "description": "Name of the storage account"
+      }
+    },
+    "workspaceName": {
+      "type": "string",
+      "defaultValue": "IndigoJMeterLogAnalytics",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace"
+      }
+    },
+    "masterScriptFilePath": {
+      "type": "string",
+      "defaultValue": "https://paolosalvatori.blob.core.windows.net/jmeter-master",
+      "metadata": {
+        "description": "The relative path of the script to download"
+      }
+    },
+    "masterScriptFileName": {
+      "type": "string",
+      "defaultValue": "install-jmeter-with-chocolatey.ps1",
+      "metadata": {
+        "description": "The name of the script to download"
+      }
+    },
+    "slaveScriptFilePath": {
+      "type": "string",
+      "defaultValue": "https://paolosalvatori.blob.core.windows.net/jmeter-slave",
+      "metadata": {
+        "description": "The relative path of the script to download"
+      }
+    },
+    "slaveScriptFileName": {
+      "type": "string",
+      "defaultValue": "install-jmeter-with-chocolatey.ps1",
+      "metadata": {
+        "description": "The name of the script to download"
+      }
+    },
+    "virtualMachines": {
+      "type": "array",
+      "defaultValue": [
+      ],
+      "metadata": {
+        "description": "This array contains the data of virtual networks and virtual machines to create"
+      }
+    }
+  },
+  "variables": {
+    "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]",
+    "bastionNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups', 'BastionNsg')]",
+    "masterNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups', 'MasterNsg')]",
+    "slaveNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups', 'SlaveNsg')]",
+    "length": "[length(parameters('virtualMachines'))]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2019-09-01",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "MasterNsg",
+      "location": "[parameters('location')]",
+      "tags": {
+        "name": "MasterNsg"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowRDPInbound",
+            "properties": {
+              "description": "Allow RDP Connections",
+              "priority": 100,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefixes": "[parameters('allowedAddresses')]",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "3389"
+            }
+          },
+          {
+            "name": "AllowJavaRmiInbound",
+            "properties": {
+              "description": "Allow Java RMI Inbound Traffic",
+              "priority": 120,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "copy": [
+                {
+                  "name": "sourceAddressPrefixes",
+                  "count": "[length(parameters('virtualMachines'))]",
+                  "input": "[if(not(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].isMaster), reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].vmName, 'Ip')), '2019-09-01').ipAddress, json('null'))]"
+                }
+              ],
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "1099"
+            }
+          },
+          {
+            "name": "AllowJMeterPortInbound",
+            "properties": {
+              "description": "Allow JMeter Inbound Traffic",
+              "priority": 130,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "copy": [
+                {
+                  "name": "sourceAddressPrefixes",
+                  "count": "[length(parameters('virtualMachines'))]",
+                  "input": "[if(not(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].isMaster), reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].vmName, 'Ip')), '2019-09-01').ipAddress, json('null'))]"
+                }
+              ],
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "4000-4002"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2019-09-01",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "SlaveNsg",
+      "location": "[parameters('location')]",
+      "tags": {
+        "name": "SlaveNsg"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowRDPInbound",
+            "properties": {
+              "description": "Allow RDP Connections",
+              "priority": 100,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefixes": "[parameters('allowedAddresses')]",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "3389"
+            }
+          },
+          {
+            "name": "AllowJavaRmiInbound",
+            "properties": {
+              "description": "Allow Java RMI Inbound Traffic",
+              "priority": 120,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "copy": [
+                {
+                  "name": "sourceAddressPrefixes",
+                  "count": "[length(parameters('virtualMachines'))]",
+                  "input": "[if(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].isMaster, reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].vmName, 'Ip')), '2019-09-01').ipAddress, json('null'))]"
+                }
+              ],
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "1099"
+            }
+          },
+          {
+            "name": "AllowJMeterPortInbound",
+            "properties": {
+              "description": "Allow JMeter Inbound Traffic",
+              "priority": 130,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefix": "*",
+              "copy": [
+                {
+                  "name": "sourceAddressPrefixes",
+                  "count": "[length(parameters('virtualMachines'))]",
+                  "input": "[if(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].isMaster, reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].vmName, 'Ip')), '2019-09-01').ipAddress, json('null'))]"
+                }
+              ],
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "4000-4002"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2019-09-01",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "BastionNsg",
+      "location": "[parameters('location')]",
+      "tags": {
+        "name": "BastionNsg"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "BastionAllowHttpsInbound",
+            "properties": {
+              "description": "Allow inbound HTTPS traffic",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationPortRange": "443",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "BastionAllowGatewayManagerInbound",
+            "properties": {
+              "description": "Allow inbound HTTPS traffic from Application Gateway",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "sourceAddressPrefix": "GatewayManager",
+              "destinationPortRange": "443",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 120,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "BastionDenyAllInbound",
+            "properties": {
+              "description": "Deny all inbound traffic",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 900,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "BastionVnetAllowRdpAndSshOutbound",
+            "properties": {
+              "description": "Allow inbound RDP and SSH traffic",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationPortRanges": [
+                "22",
+                "3389"
+              ],
+              "destinationAddressPrefix": "VirtualNetwork",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "BastionAzureAllowHttpsOutbound",
+            "properties": {
+              "description": "Allow inbound RDP and SSH traffic",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationPortRange": "443",
+              "destinationAddressPrefix": "AzureCloud",
+              "access": "Allow",
+              "priority": 120,
+              "direction": "Outbound"
+            }
+          },
+          {
+            "name": "BastionDenyAllOutbound",
+            "properties": {
+              "description": "Deny all inbound traffic",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationPortRange": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 900,
+              "direction": "Outbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-11-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        }
+      },
+      "resources": [
+        {
+          "apiVersion": "2015-11-01-preview",
+          "location": "[parameters('location')]",
+          "name": "[concat('AgentHealthAssessment', '(', parameters('workspaceName'),')')]",
+          "type": "Microsoft.OperationsManagement/solutions",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          },
+          "plan": {
+            "name": "[concat('AgentHealthAssessment', '(', parameters('workspaceName'),')')]",
+            "publisher": "Microsoft",
+            "product": "OMSGallery/AgentHealthAssessment",
+            "promotionCode": ""
+          }
+        },
+        {
+          "apiVersion": "2015-11-01-preview",
+          "location": "[parameters('location')]",
+          "name": "[concat('ServiceMap', '(', parameters('workspaceName'),')')]",
+          "type": "Microsoft.OperationsManagement/solutions",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          },
+          "plan": {
+            "name": "[concat('ServiceMap', '(', parameters('workspaceName'),')')]",
+            "publisher": "Microsoft",
+            "product": "[concat('OMSGallery/', 'ServiceMap')]",
+            "promotionCode": ""
+          }
+        },
+        {
+          "apiVersion": "2015-11-01-preview",
+          "location": "[parameters('location')]",
+          "name": "[concat('InfrastructureInsights', '(', parameters('workspaceName'),')')]",
+          "type": "Microsoft.OperationsManagement/solutions",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          },
+          "plan": {
+            "name": "[concat('InfrastructureInsights', '(', parameters('workspaceName'),')')]",
+            "publisher": "Microsoft",
+            "product": "[concat('OMSGallery/', 'InfrastructureInsights')]",
+            "promotionCode": ""
+          }
+        },
+        {
+          "apiVersion": "2015-11-01-preview",
+          "type": "dataSources",
+          "name": "WindowsEventLog-Application",
+          "dependsOn": [
+            "[variables('workspaceId')]"
+          ],
+          "kind": "WindowsEvent",
+          "properties": {
+            "eventLogName": "Application",
+            "eventTypes": [
+              {
+                "eventType": "Error"
+              },
+              {
+                "eventType": "Warning"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
+      "apiVersion": "2019-09-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[concat(parameters('virtualMachines')[copyIndex()].vmName, 'Ip')]",
+      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "tags": {
+        "name": "[parameters('virtualMachines')[copyIndex()].vmName]"
+      },
+      "copy": {
+        "name": "vmPublicIPAddressesCopy",
+        "count": "[variables('length')]"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(toLower(parameters('virtualMachines')[copyIndex()].vmName), uniquestring(resourceGroup().id))]"
+        }
+      }
+    },
+    {
+      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
+      "apiVersion": "2019-09-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[concat(parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName, 'Ip')]",
+      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "tags": {
+        "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName]"
+      },
+      "copy": {
+        "name": "bastionPublicIPAddressesCopy",
+        "count": "[variables('length')]"
+      },
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+    },
+    {
+      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
+      "type": "Microsoft.Network/bastionHosts",
+      "apiVersion": "2019-09-01",
+      "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName]"
+      },
+      "copy": {
+        "name": "bastionHostsCopy",
+        "count": "[variables('length')]"
+      },
+      "dependsOn": [
+        "bastionPublicIPAddressesCopy"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "[concat(parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName, 'IpConfiguration')]",
+            "properties": {
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetwork').name, 'AzureBastionSubnet')]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIpAddresses', concat(parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName, 'Ip'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
+      "type": "Microsoft.Network/bastionHosts/providers/diagnosticsettings",
+      "name": "[concat(parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName, '/Microsoft.Insights/service')]",
+      "apiVersion": "2016-09-01",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName]"
+      },
+      "copy": {
+        "name": "bastionHostDiagnosticSettingsCopy",
+        "count": "[variables('length')]"
+      },
+      "dependsOn": [
+        "[variables('workspaceId')]"
+      ],
+      "properties": {
+        "workspaceId": "[variables('workspaceId')]",
+        "logs": [
+          {
+            "category": "BastionAuditLogs",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": true,
+              "days": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
+      "apiVersion": "2019-09-01",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.name]",
+      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "copy": {
+        "name": "virtualNetworksCopy",
+        "count": "[variables('length')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', 'MasterNsg')]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', 'SlaveNsg')]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', 'BastionNsg')]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.addressPrefixes]"
+        },
+        "subnets": [
+          {
+            "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.subnetName]",
+            "properties": {
+              "addressPrefix": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.subnetAddressPrefix]",
+              "networkSecurityGroup": {
+                "id": "[if(parameters('virtualMachines').isMaster, variables('masterNsgId'), variables('slaveNsgId'))]"
+              }
+            }
+          },
+          {
+            "name": "AzureBastionSubnet",
+            "properties": {
+              "addressPrefix": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionAddressPrefix]",
+              "networkSecurityGroup": {
+                "id": "[variables('bastionNsgId')]"
+              }
+            },
+            "type": "Microsoft.Network/virtualNetworks/subnets"
+          }
+        ]
+      }
+    },
+    {
+      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(parameters('virtualMachines')[copyIndex()].vmName, 'Nic')]",
+      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "tags": {
+        "name": "[parameters('virtualMachines')[copyIndex()].vmName]"
+      },
+      "copy": {
+        "name": "networkInterfacesCopy",
+        "count": "[variables('length')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex()].vmName, 'Ip'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualMachines')[copyIndex()].virtualNetwork.name)]",
+        "[variables('masterNsgId')]",
+        "[variables('slaveNsgId')]",
+        "[variables('bastionNsgId')]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "VmIpConfiguration",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex()].vmName, 'Ip'))]"
+              },
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualMachines')[copyIndex()].virtualNetwork.name, parameters('virtualMachines')[copyIndex()].virtualNetwork.subnetName)]"
+              }
+            }
+          }
+        ],
+        "networkSecurityGroup": {
+          "id": "[if(parameters('virtualMachines').isMaster, variables('masterNsgId'), variables('slaveNsgId'))]"
+        }
+      }
+    },
+    {
+      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
+      "apiVersion": "2019-07-01",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[parameters('virtualMachines')[copyIndex()].vmName]",
+      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "copy": {
+        "name": "virtualMachinesCopy",
+        "count": "[variables('length')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('virtualMachines')[copyIndex()].vmName, 'Nic'))]"
+      ],
+      "tags": {
+        "name": "[parameters('virtualMachines')[copyIndex()].vmName]"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('virtualMachines')[copyIndex()].vmName]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "provisionVmAgent": "true",
+            "enableAutomaticUpdates": "true"
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[parameters('vmImagePublisher')]",
+            "offer": "[parameters('vmImageOffer')]",
+            "sku": "[parameters('vmImageSku')]",
+            "version": "[parameters('vmImageVersion')]"
+          },
+          "osDisk": {
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('virtualMachines')[copyIndex()].vmName, 'Nic'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+      ]
+    },
+    {
+      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
+      "apiVersion": "2019-03-01",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(parameters('virtualMachines')[copyIndex()].vmName, '/MicrosoftMonitoringAgent')]",
+      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "copy": {
+        "name": "microsoftMonitoringAgentCopy",
+        "count": "[variables('length')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachines')[copyIndex()].vmName)]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.EnterpriseCloud.Monitoring",
+        "type": "MicrosoftMonitoringAgent",
+        "typeHandlerVersion": "1.0",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "workspaceId": "[reference(variables('workspaceId'), '2017-03-15-preview').customerId]"
+        },
+        "protectedSettings": {
+          "workspaceKey": "[listKeys(variables('workspaceId'), '2017-03-15-preview').primarySharedKey]"
+        }
+      }
+    },
+    {
+      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
+      "apiVersion": "2019-03-01",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(parameters('virtualMachines')[copyIndex()].vmName, '/DependencyAgent')]",
+      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "copy": {
+        "name": "dependencyAgentCopy",
+        "count": "[variables('length')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachines')[copyIndex()].vmName)]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Azure.Monitoring.DependencyAgent",
+        "type": "DependencyAgentWindows",
+        "typeHandlerVersion": "9.4",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+        },
+        "protectedSettings": {
+        }
+      }
+    },
+    {
+      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
+      "apiVersion": "2019-03-01",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(parameters('virtualMachines')[copyIndex()].vmName, '/InstallJMeter')]",
+      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "copy": {
+        "name": "customScriptExtensionCopy",
+        "count": "[variables('length')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachines')[copyIndex()].vmName)]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Compute",
+        "type": "CustomScriptExtension",
+        "typeHandlerVersion": "1.9",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "fileUris": [
+            "[if(parameters('virtualMachines')[copyIndex()].isMaster, concat(parameters('masterScriptFilePath'), '/', parameters('masterScriptFileName')), concat(parameters('slaveScriptFilePath'), '/', parameters('slaveScriptFileName')))]"
+          ]
+        },
+        "protectedSettings": {
+          "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File ', if(parameters('virtualMachines')[copyIndex()].isMaster, parameters('masterScriptFileName'), parameters('slaveScriptFileName')))]"
+        }
+      }
+    }
+  ],
+  "outputs": {
+  }
+}
