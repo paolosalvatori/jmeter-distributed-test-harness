@@ -54,11 +54,11 @@ You can connect to the JMeter master node with the credentials specified in the 
 
 You can also use the **run.ps1** PowerShell script to run tests on the master node or remote nodes. The script allows to specify the thread number, warmup time, and duration of the test. In order to use this data as parameters, the JMeter test file (.jmx) needs to use define corresponding parameters. As a sample, see the **bing-test.jmx** JMeter test in this repository.
 
-![Slave NSG](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/RunScript.png)
+![Run SCript](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/RunScript.png)
 
 This script allows to save JMeter logs, results and dashboard on the local file system.
 
-![Slave NSG](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/RunScript.png)
+![JMeter Dashboard](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/JMeterDashboard.png)
 
 You can use **Windows PowerShell** or **Windows PowerShell ISE** to run commands. For example, the following command:
 
