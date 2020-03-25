@@ -29,7 +29,12 @@ At point 2 and 3 you can see that the access to ports **1099** and **4000-4002**
  
 You can connect to master and slave nodes via RDP on port 3389. In addition, you can connect to the JMeter master virtual machine via [Azure Bastion](https://docs.microsoft.com/en-us/azure/bastion/bastion-overview) which provides secure and seamless RDP/SSH connectivity to your virtual machines directly in the Azure portal over SSL. You can customize the ARM template to disable the access to virtual machines via RDP by eliminating the corresponding rule in the Network Security Groups or you can eliminate Azure Bastion if you don't want to use this access type. 
  
-A Custom SC
+A [Custom Script Extension for Windows](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/custom-script-windows) downloads and executes a PowerShell script that performs the following tasks:
+
+- Automatically installs Apache JMeter on both the master and slave nodes via [Chocolatey](https://chocolatey.org/packages/jmeter) .  - Customizes the JMeter properties file to disable RMI over SSL and set 4000 TCP port for client/server communications. 
+- Downloads the [JMeter Backend Listener for Application Insights](https://github.com/adrianmo/jmeter-backend-azure) that can be used to send test results to Azure Application Insights.
+- Creates a Windows Task on slave nodes to launch JMeter Server at the startup.
+- Automatically starts Jmeter Server on slave nodes.
 
 In addition, all the virtual machines in the topology are configured to collect diagnostics logs, Windows Logs, and performance counters to a Log Analytics workspace. The workspace makes use of the following solutions to keep track of the health of the virtual machines:
 
@@ -38,17 +43,44 @@ In addition, all the virtual machines in the topology are configured to collect 
 - [Infrastructure Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/insights/vminsights-enable-overview)
 
 # Deployment #
-The deployment of the topology is fully automated via:
-
-- ARM templates
-- Bash script
-- Azure DevOps CI/CD pipelines
-
-Make sure to substitute the placeholders in the parameters files and in the **setup.bat** bash script, then run this script to deploy the sample in your Azure subscription.
+You can use the **azuredeploy.json** ARM template to deploy the JMeter test harness. You can edit the **azuredeploy.parameters.json** file to customize the installation. In particular, you can customize the list of virtual machines by editing the **virtualMachines** parameter in the parameters file.
 
 # Testing #
-VPN into the Jumpbox VM using Bastion or the public IP of the virtual machine, and use an internet browser to connect to the private endpoint exposed by the Application Gateway. If you refresh the page, you should see that requests are distributed across the 3 web Apps, each located in a separate zonal ILB App Service Environment.
-<br/>
-<br/>
-![HelloWorld](https://raw.githubusercontent.com/paolosalvatori/multi-az-ase/master/images/helloworld.png)
-<br/>
+You can connect to the JMeter master node with the credentials specified in the ARM template to run tests using the JMeter UI or command-line tool. For more information on how to run tests on remote nodes, see: 
+
+- [Apache JMeter Distributed Testing Step-by-step](https://jmeter.apache.org/usermanual/jmeter_distributed_testing_step_by_step.html)
+- [Jmeter Remote Testing](https://jmeter.apache.org/usermanual/remote-test.html)
+
+You can also use the **run.ps1** PowerShell script to run tests on the master node or remote nodes. The script allows to specify the thread number, warmup time, and duration of the test. In order to use this data as parameters, the JMeter test file (.jmx) needs to use define corresponding parameters. As a sample, see the **bing-test.jmx** JMeter test in this repository.
+
+![Slave NSG](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/RunScript.png)
+
+This script allows to save JMeter logs, results and dashboard on the local file system.
+
+![Slave NSG](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/RunScript.png)
+
+You can use **Windows PowerShell** or **Windows PowerShell ISE** to run commands. For example, the following command:
+
+```powershell
+.\run.ps1 -JMeterTest .\bing-test.jmx -Duration 60 -WarmupTime 30 -NumThreads 30 -Remote "191.233.25.31, 40.74.104.255, 52.155.176.185"
+```
+
+generates the following JMeter command:
+
+```batch
+C:\ProgramData\chocolatey\lib\jmeter\tools\apache-jmeter-5.2.1\bin\jmeter -n -t ".\bing-test.jmx" -l "C:\tests\test_runs\bing-test_1912332531_4074104255_52155176185\test_20200325_052525\results\resultfile.jtl" -e -o "C:\tests\test_runs\bing-test_1912332531_4074104255_52155176185\test_20200325_052525\output" -j "C:\tests\test_runs\bing-test_1912332531_4074104255_52155176185\test_20200325_052525\logs\jmeter.jtl" -Jmode=Stand
+ard -Gnum_threads=30 -Gramp_time=30 -Gduration=60 -Djava.rmi.server.hostname=51.124.79.211 -R "191.233.25.31, 40.74.104.255, 52.155.176.185"
+```
+
+# Possible Developments #
+This solution uses Public IPs to let master and slave nodes to communicate with each other. An alternative solution could be deploying master and slave nodes in different virtual networks located in different regions and use [global virtual network peering](https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview) to connect these virtual networks. Using this approach, the master node could communicate with slave nodes via private IP addresses.
+
+This topology has the following advantages over a topology that uses private IP addresses:
+
+- Reduced complexity 
+- Lower total cost of ownership (TCO)
+- Extensibility
+
+As an example of extensibility, you can provision slave nodes on other cloud platforms. I personally tested this possibility by provisioning additional slave nodes on AWS.
+
+Last but not least, the ARM template can be easily changed to replace **virtual machines** with **virtual machine scale sets** (VMSS).
