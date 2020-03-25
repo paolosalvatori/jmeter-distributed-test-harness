@@ -44,7 +44,7 @@ In addition, all the virtual machines in the topology are configured to collect 
 - [Infrastructure Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/insights/vminsights-enable-overview)
 
 # Deployment #
-You can use the **azuredeploy.json** ARM template to deploy the JMeter test harness. You can edit the **azuredeploy.parameters.json** file to customize the installation. In particular, you can customize the list of virtual machines by editing the **virtualMachines** parameter in the parameters file.
+You can use the **azuredeploy.json** ARM template and parameters file included in this repository to deploy the JMeter test harness. Make sure to edit the **azuredeploy.parameters.json** file to customize the installation. In particular, you can customize the list of virtual machines by editing the **virtualMachines** parameter in the parameters file. You can also use the **deploy.sh** Bash script to deploy the ARM template.
 
 # Testing #
 You can connect to the JMeter master node with the credentials specified in the ARM template to run tests using the JMeter UI or command-line tool. For more information on how to run tests on remote nodes, see: 
