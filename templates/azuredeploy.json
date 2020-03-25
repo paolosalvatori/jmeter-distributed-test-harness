@@ -72,7 +72,7 @@
     },
     "masterScriptFilePath": {
       "type": "string",
-      "defaultValue": "https://paolosalvatori.blob.core.windows.net/jmeter-master",
+      "defaultValue": "https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/cse/master-node",
       "metadata": {
         "description": "The relative path of the script to download"
       }
@@ -86,7 +86,7 @@
     },
     "slaveScriptFilePath": {
       "type": "string",
-      "defaultValue": "https://paolosalvatori.blob.core.windows.net/jmeter-slave",
+      "defaultValue": "https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/cse/slave-node",
       "metadata": {
         "description": "The relative path of the script to download"
       }

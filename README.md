@@ -33,6 +33,7 @@ A [Custom Script Extension for Windows](https://docs.microsoft.com/en-us/azure/v
 
 - Automatically installs Apache JMeter on both the master and slave nodes via [Chocolatey](https://chocolatey.org/packages/jmeter) .  - Customizes the JMeter properties file to disable RMI over SSL and set 4000 TCP port for client/server communications. 
 - Downloads the [JMeter Backend Listener for Application Insights](https://github.com/adrianmo/jmeter-backend-azure) that can be used to send test results to Azure Application Insights.
+- Creates inbound rules in the Windows Firewall to allow traffic on ports 1099 and 4000-4002.
 - Creates a Windows Task on slave nodes to launch JMeter Server at the startup.
 - Automatically starts Jmeter Server on slave nodes.
 

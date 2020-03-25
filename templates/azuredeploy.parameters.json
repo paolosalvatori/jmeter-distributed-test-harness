@@ -30,13 +30,13 @@
       "value": "IndigoJMeterTestLogAnalytics"
     },
     "masterScriptFilePath": {
-      "value": "https://paolosalvatori.blob.core.windows.net/jmeter-master"
+      "value": "https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/cse/master-node"
     },
     "masterScriptFileName": {
       "value": "install-jmeter-with-chocolatey.ps1"
     },
     "slaveScriptFilePath": {
-      "value": "https://paolosalvatori.blob.core.windows.net/jmeter-slave"
+      "value": "https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/cse/slave-node"
     },
     "slaveScriptFileName": {
       "value": "install-jmeter-with-chocolatey.ps1"
