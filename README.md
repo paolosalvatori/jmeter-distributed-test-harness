@@ -8,25 +8,22 @@ Apache JMeter distributed testing leverages multiple systems to perform load tes
 
 # Architecture #
 The following picture shows the architecture and network topology of the JMeter distributed test harness.
-<br/>
-<br/>
-![Architecture](../TestHarness.png)
-<br/>
+
+![Architecture](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/TestHarness.png)
+
 JMeter master and slave nodes expose a Public IP using the [Java Remote Method Invocation](https://en.wikipedia.org/wiki/Java_remote_method_invocation) communication protocol over the public internet. In order to lock down security, [Network Security Groups](https://docs.microsoft.com/en-us/azure/virtual-network/security-overview) are used to allow inbound traffic on the TCP ports used by JMeter on master and slave nodes only from the virtual machines that are part of the topology. 
 
  The following picture shows the Network Security Group of the master node. 
-<br/>
-<br/>
-![Master NSG](../MasterNSG.png)
-<br/> 
+
+![Master NSG](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/MasterNSG.png)
+
 At point 1 you can note that the access via RDP is allowed only from a given public IP. You can restrict the RDP access to master and slave nodes by specifing a public IP as value of the **allowedAddress** parameter in the **azuredeploy.parameters.json** file.
 At point 2 and 3 you can see that the access to ports **1099** and **4000-4002** used by JMeter on the master node is retricted to the public IPs of the slave nodes.
 
  The following picture shows the Network Security Group of the slave node. 
-<br/>
-<br/>
-![Slave NSG](../SlaveNSG.png)
-<br/> 
+
+![Slave NSG](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/SlaveNSG.png)
+
 At point 1 you can note that the access via RDP is allowed only from a given public IP. You can restrict the RDP access to master and slave nodes by specifing a public IP as value of the **allowedAddress** parameter in the **azuredeploy.parameters.json** file.
 At point 2 and 3 you can see that the access to ports **1099** and **4000-4002** used by JMeter on the master node is retricted to the public IPs of the master node.
  
@@ -39,7 +36,6 @@ In addition, all the virtual machines in the topology are configured to collect 
 - [Agent Health](https://docs.microsoft.com/en-us/azure/azure-monitor/insights/solution-agenthealth)
 - [Service Map](https://docs.microsoft.com/en-us/azure/azure-monitor/insights/service-map)
 - [Infrastructure Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/insights/vminsights-enable-overview)
-
 
 # Deployment #
 The deployment of the topology is fully automated via:
