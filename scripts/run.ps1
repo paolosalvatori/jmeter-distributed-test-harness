@@ -1,31 +1,31 @@
 Param (
-    [Parameter(Position=0)][string]$jMeterTest,
-    [Parameter(Position=1)][string]$keyVaultResourceGroupName = "IndigoHapiRG",
-    [Parameter(Position=2)][string]$keyVaultName = "IndigoHapiKeyVault",
-    [Parameter(Position=3)][string]$tenantName = "hennesandmauritz.onmicrosoft.com",
-    [Parameter(Position=4)][string]$remote = "",
-    [Parameter(Position=5)][ValidateRange(1, [int]::MaxValue)][int]$numThreads = 20,
-    [Parameter(Position=6)][ValidateRange(1, [int]::MaxValue)][int]$duration = 600,
-    [Parameter(Position=7)][ValidateRange(1, [int]::MaxValue)][int]$warmupTime = 30,
-    [Parameter(Position=8)][bool]$useAuthentication = $false,
-    [Parameter(Position=9)][bool]$logParameters = $true
+    [Parameter(Position=0)][string]$JMeterTest,
+    [Parameter(Position=1)][string]$KeyVaultResourceGroupName = "key-vault-resource-group",
+    [Parameter(Position=2)][string]$KeyVaultName = "key-vault-name",
+    [Parameter(Position=3)][string]$TenantName = "your-tenant.onmicrosoft.com",
+    [Parameter(Position=4)][string]$Remote = "",
+    [Parameter(Position=5)][ValidateRange(1, [int]::MaxValue)][int]$NumThreads = 20,
+    [Parameter(Position=6)][ValidateRange(1, [int]::MaxValue)][int]$Duration = 600,
+    [Parameter(Position=7)][ValidateRange(1, [int]::MaxValue)][int]$WarmupTime = 30,
+    [Parameter(Position=8)][bool]$UseAuthentication = $false,
+    [Parameter(Position=9)][bool]$LogParameters = $true
 )
 
-if ($logParameters -eq $true)
+if ($LogParameters -eq $true)
 {
     $line = [System.String]::new("-", 80)
     Write-Host $line
     Write-Host "Parameters"
     Write-Host $line
-    Write-Host 'jMeterTest:' $jMeterTest
-    Write-Host 'keyVaultResourceGroupName:' $keyVaultResourceGroupName
-    Write-Host 'keyVaultName:' $keyVaultName
-    Write-Host 'tenantName:' $tenantName
-    Write-Host 'remote:' $remote
-    Write-Host 'useAuthentication:' $useAuthentication
-    Write-Host 'numThreads:' $numThreads
-    Write-Host 'warmupTime:' $warmupTime
-    Write-Host 'duration:' $duration
+    Write-Host 'jMeterTest:' $JMeterTest
+    Write-Host 'keyVaultResourceGroupName:' $KeyVaultResourceGroupName
+    Write-Host 'keyVaultName:' $KeyVaultName
+    Write-Host 'tenantName:' $TenantName
+    Write-Host 'remote:' $Remote
+    Write-Host 'useAuthentication:' $UseAuthentication
+    Write-Host 'numThreads:' $NumThreads
+    Write-Host 'warmupTime:' $WarmupTime
+    Write-Host 'duration:' $Duration
     Write-Host $line
 }
 
@@ -33,22 +33,24 @@ if ($logParameters -eq $true)
 #
 # parameters validation
 #
-if ([System.String]::IsNullOrWhiteSpace($jMeterTest)) {
+if ([System.String]::IsNullOrWhiteSpace($JMeterTest)) {
     Write-Host "ERROR: the -TestFileAndPath parameter cannot be null."
     exit -10
 }
-if (![System.String]::IsNullOrWhiteSpace($remote)) {
-    $prefix = "-" + $remote -replace "\.", ""
+if (![System.String]::IsNullOrWhiteSpace($Remote)) {
+    $prefix = "_" + $Remote -replace "\.", ""
+    $prefix = $prefix -replace ",", ""
+    $prefix = $prefix -replace " ", "_"
 } 
 else {
-    $prefix = "-127001"
+    $prefix = "_local"
 }
 
 [System.IO.Directory]::SetCurrentDirectory((Get-Location).ToString())
-$testFileFullPath = [System.IO.Path]::GetFullPath($jMeterTest)
+$testFileFullPath = [System.IO.Path]::GetFullPath($JMeterTest)
 
 if (![System.IO.File]::Exists($testFileFullPath)) {
-    Write-Host "ERROR:" $jMeterTest "file does not exists."
+    Write-Host "ERROR:" $JMeterTest "file does not exists."
     exit -10
 }
 
@@ -67,7 +69,7 @@ $jmeterResourceUriSecretName="JMeterTestDriverResourceUri"
 # Create the test_runs folder
 #
 $currentPath = (Get-Location).ToString()
-$rootFolderName = [System.IO.Path]::Combine($currentPath, "test-runs")
+$rootFolderName = [System.IO.Path]::Combine($currentPath, "test_runs")
 
 if (![System.IO.Directory]::Exists($rootFolderName)) {
     New-Item -Path $rootFolderName -ItemType Directory
@@ -95,14 +97,14 @@ if (![System.IO.Directory]::Exists($testRunFolderName)) {
 #
 # If Authentication is used, read the secrets from KV
 #
-if($useAuthentication) {
+if($UseAuthentication) {
     # Get the ClientID, ClientSecret and ResourceURI from Azure Key Vault
-    $clientId = Get-AzKeyVaultSecret -vaultName "$keyVaultName" -SecretName "$jmeterClientIdSecretName" -ErrorAction Stop
-    $clientSecret = Get-AzKeyVaultSecret -vaultName "$keyVaultName" -SecretName "$jmeterClientSecretSecretName" -ErrorAction Stop
-    $resourceUri = Get-AzKeyVaultSecret -vaultName "$keyVaultName" -SecretName "$jmeterResourceUriSecretName" -ErrorAction Stop
+    $clientId = Get-AzKeyVaultSecret -vaultName "$KeyVaultName" -SecretName "$jmeterClientIdSecretName" -ErrorAction Stop
+    $clientSecret = Get-AzKeyVaultSecret -vaultName "$KeyVaultName" -SecretName "$jmeterClientSecretSecretName" -ErrorAction Stop
+    $resourceUri = Get-AzKeyVaultSecret -vaultName "$KeyVaultName" -SecretName "$jmeterResourceUriSecretName" -ErrorAction Stop
 
     if( !($clientId) -or !($clientSecret) -or !($resourceUri)) {
-        Write-Host "ERROR: Missing secrets in" $keyVaultName "Azure Key Vault. Secrets $jmeterClientIdSecretName, $jmeterClientSecretSecretName and $jmeterResourceUriSecretName are required!"
+        Write-Host "ERROR: Missing secrets in" $KeyVaultName "Azure Key Vault. Secrets $jmeterClientIdSecretName, $jmeterClientSecretSecretName and $jmeterResourceUriSecretName are required!"
         exit -10
     }
 }
@@ -110,36 +112,36 @@ if($useAuthentication) {
 # Define the common part of the JMeter command
 $jMeterFolder = (Get-ChildItem Env:JMETER_HOME).Value
 $jMeterPath = "$jMeterFolder\bin\jmeter"
-$parameters = @("-n", "-t", "`"$jMeterTest`"", "-l", "`"$testRunResultsFolderName\resultfile.jtl`"", "-e", "-o", "`"$testRunOutputFolderName`"", "-j", "`"$testRunLogsFolderName\jmeter.jtl`"", "-Jmode=Standard")
+$parameters = @("-n", "-t", "`"$JMeterTest`"", "-l", "`"$testRunResultsFolderName\resultfile.jtl`"", "-e", "-o", "`"$testRunOutputFolderName`"", "-j", "`"$testRunLogsFolderName\jmeter.jtl`"", "-Jmode=Standard")
 
-if (![System.String]::IsNullOrWhiteSpace($remote)) {
+if (![System.String]::IsNullOrWhiteSpace($Remote)) {
     # Set general parameters
-    $parameters += "-Gnum_threads=$($numThreads)" 
-    $parameters += "-Gramp_time=$($warmupTime)"
-    $parameters += "-Gduration=$($duration)"
+    $parameters += "-Gnum_threads=$($NumThreads)" 
+    $parameters += "-Gramp_time=$($WarmupTime)"
+    $parameters += "-Gduration=$($Duration)"
     
     # Define additional part of JMeter command when running the test remotely on slave nodes
     $ip = Invoke-RestMethod -Uri 'https://api.ipify.org'
     $parameters += "-Djava.rmi.server.hostname=$ip"
     $parameters += "-R"
-    $parameters += "`"$remote`""
+    $parameters += "`"$Remote`""
 
-    if ($useAuthentication) {
+    if ($UseAuthentication) {
         # Use authenication credentials from Key Vault
-        $parameters += "-Gtenant_name=`"$($tenantName)`""
+        $parameters += "-Gtenant_name=`"$($TenantName)`""
         $parameters += "-Gclient_id=`"$($clientId.SecretValueText)`""
         $parameters += "-Gclient_secret=`"$($clientSecret.SecretValueText)`""
         $parameters += "-Gresource_uri=`"$($resourceUri.SecretValueText)`""
     } 
 } else {
     # Set general parameters
-    $parameters += "-Jnum_threads=$($numThreads)" 
-    $parameters += "-Jramp_time=$($warmupTime)"
-    $parameters += "-Jduration=$($duration)"
+    $parameters += "-Jnum_threads=$($NumThreads)" 
+    $parameters += "-Jramp_time=$($WarmupTime)"
+    $parameters += "-Jduration=$($Duration)"
 
-    if ($useAuthentication) {
+    if ($UseAuthentication) {
         # Use authenication credentials from Key Vault
-        $parameters += "-Jtenant_name=`"$($tenantName)`""
+        $parameters += "-Jtenant_name=`"$($TenantName)`""
         $parameters += "-Jclient_id=`"$($clientId.SecretValueText)`""
         $parameters += "-Jclient_secret=`"$($clientSecret.SecretValueText)`""
         $parameters += "-Jresource_uri=`"$($resourceUri.SecretValueText)`""

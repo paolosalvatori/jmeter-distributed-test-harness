@@ -2,8 +2,8 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.1",
   "parameters": {
-    "allowedAddresses": {
-      "value": ["*"]
+    "allowedAddress": {
+      "value": "93.34.128.248"
     },
     "location": {
       "value": "West Europe"
@@ -26,11 +26,8 @@
     "adminPassword": {
       "value": "N1cePassw0rd!"
     },
-    "storageAccountName": {
-      "value": "indigojmetervmdiag"
-    },
     "workspaceName": {
-      "value": "IndigoJMeterLogAnalytics"
+      "value": "IndigoJMeterTestLogAnalytics"
     },
     "masterScriptFilePath": {
       "value": "https://paolosalvatori.blob.core.windows.net/jmeter-master"
@@ -44,92 +41,49 @@
     "slaveScriptFileName": {
       "value": "install-jmeter-with-chocolatey.ps1"
     },
-    "virtualMachines": {
-      "value": [{
-          "deploy": true,
-          "isMaster": true,
-          "location": "West Europe",
-          "vmName": "MasterVm",
-          "virtualNetwork": {
-            "name": "MasterVmVnetWe",
-            "addressPrefixes": ["10.0.0.0/16"],
-            "subnetName": "MasterVnSubnet",
-            "subnetAddressPrefix": "10.0.0.0/24",
-            "bastionName": "MasterVmBastion",
-            "bastionAddressPrefix": "10.0.1.0/24"
-          }
-        },
-        {
-          "deploy": true,
-          "isMaster": false,
-          "location": "Japan West",
-          "vmName": "SlaveVmJw",
-          "virtualNetwork": {
-            "name": "SlaveVmVnetJw",
-            "addressPrefixes": ["10.1.0.0/16"],
-            "subnetName": "SlaveVmSubnet",
-            "subnetAddressPrefix": "10.1.0.0/24",
-            "bastionName": "SlaveVmBastionJw",
-            "bastionAddressPrefix": "10.1.1.0/24"
-          }
-        },
-        {
-          "deploy": false,
-          "isMaster": false,
-          "location": "West US",
-          "vmName": "SlaveVmWu",
-          "virtualNetwork": {
-            "name": "SlaveVmVnetWu",
-            "addressPrefixes": ["10.2.0.0/16"],
-            "subnetName": "SlaveVmSubnet",
-            "subnetAddressPrefix": "10.2.0.0/24",
-            "bastionName": "SlaveVmBastionWu",
-            "bastionAddressPrefix": "10.2.1.0/24"
-          }
-        },
-        {
-          "deploy": true,
-          "isMaster": false,
-          "location": "Brazil South",
-          "vmName": "SlaveVmBs",
-          "virtualNetwork": {
-            "name": "SlaveVmVnetBs",
-            "addressPrefixes": ["10.3.0.0/16"],
-            "subnetName": "SlaveVmSubnet",
-            "subnetAddressPrefix": "10.3.0.0/24",
-            "bastionName": "SlaveVmBastionBs",
-            "bastionAddressPrefix": "10.3.1.0/24"
-          }
-        },
-        {
-          "deploy": true,
-          "isMaster": false,
-          "location": "North Europe",
-          "vmName": "SlaveVmNe",
-          "virtualNetwork": {
-            "name": "SlaveVmVnetNe",
-            "addressPrefixes": ["10.4.0.0/16"],
-            "subnetName": "SlaveVmSubnet",
-            "subnetAddressPrefix": "10.4.0.0/24",
-            "bastionName": "SlaveVmBastionNe",
-            "bastionAddressPrefix": "10.4.1.0/24"
-          }
-        },
-        {
-          "deploy": false,
-          "isMaster": false,
-          "location": "East US",
-          "vmName": "SlaveVmEu",
-          "virtualNetwork": {
-            "name": "SlaveVmVnetEu",
-            "addressPrefixes": ["10.5.0.0/16"],
-            "subnetName": "SlaveVmSubnet",
-            "subnetAddressPrefix": "10.5.0.0/24",
-            "bastionName": "SlaveVmBastionEu",
-            "bastionAddressPrefix": "10.5.1.0/24"
-          }
+    "bastion": {
+      "value": {
+        "namePrefix": "Bastion",
+        "subnetAddressPrefix": "10.0.1.0/24"
+      }
+    },
+    "virtualNetwork": {
+      "value": {
+        "namePrefix": "JmeterVnet",
+        "addressPrefixes": ["10.0.0.0/16"],
+        "subnetPrefix": "VmSubnet",
+        "subnetAddressPrefix": "10.0.0.0/24"
+      }
+    },
+    "masterNodes": {
+      "value": {
+        "namePrefix": "MasterVm",
+        "locations": [{
+          "region": "West Europe",
+          "nameSuffix": "We"
         }
-      ]
+      ]}
+    },
+    "slaveNodes": {
+      "value": {
+        "namePrefix": "SlaveVm",
+        "locations": [{
+          "region": "Japan West",
+          "nameSuffix": "Jw"
+        },
+        {
+          "region": "Brazil South",
+          "nameSuffix": "Bs"
+        },
+        {
+          "region": "North Europe",
+          "nameSuffix": "Ne"
+        },
+        {
+          "region": "West US",
+          "nameSuffix": "Wu"
+        }
+      ]}
     }
   }
 }

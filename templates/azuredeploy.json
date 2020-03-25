@@ -2,11 +2,11 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "allowedAddresses": {
-      "type": "array",
-      "defaultValue": ["*"],
+    "allowedAddress": {
+      "type": "string",
+      "defaultValue": "*",
       "metadata": {
-        "description": "This array contains the list of public IP addresses that are allowed to connect to virtual machines via RDP."
+        "description": "This parameter contains the public IP addresses that is allowed to connect to virtual machines via RDP."
       }
     },
     "location": {
@@ -63,13 +63,6 @@
         "description": "Password for the Virtual Machine."
       }
     },
-    "storageAccountName": {
-      "type": "string",
-      "defaultValue": "indigojmetervmdiag",
-      "metadata": {
-        "description": "Name of the storage account"
-      }
-    },
     "workspaceName": {
       "type": "string",
       "defaultValue": "IndigoJMeterLogAnalytics",
@@ -105,30 +98,62 @@
         "description": "The name of the script to download"
       }
     },
-    "virtualMachines": {
-      "type": "array",
+    "bastion": {
+      "type": "object",
+      "defaultValue": {
+        "namePrefix": "Bastion",
+        "subnetAddressPrefix": "10.0.1.0/24"
+      },
+      "metadata": {
+        "description": "This object contains data to build Azure Bastion resources"
+      }
+    },
+    "virtualNetwork": {
+      "type": "object",
+      "defaultValue": {
+        "namePrefix": "JmeterVnet",
+        "addressPrefixes": [
+          "10.0.0.0/16"
+        ],
+        "subnetPrefix": "VmSubnet",
+        "subnetAddressPrefix": "10.0.0.0/24"
+      },
+      "metadata": {
+        "description": "This object contains data to build virtual networks and subnets"
+      }
+    },
+    "masterNodes": {
+      "type": "object",
       "defaultValue": [
       ],
       "metadata": {
-        "description": "This array contains the data of virtual networks and virtual machines to create"
+        "description": "This object contains the name prefix and an array of the locations of the master nodes"
+      }
+    },
+    "slaveNodes": {
+      "type": "object",
+      "defaultValue": [
+      ],
+      "metadata": {
+        "description": "This object contains the name prefix and an array of the locations of the slave nodes"
       }
     }
   },
   "variables": {
-    "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]",
-    "bastionNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups', 'BastionNsg')]",
-    "masterNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups', 'MasterNsg')]",
-    "slaveNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups', 'SlaveNsg')]",
-    "length": "[length(parameters('virtualMachines'))]"
+    "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
   },
   "resources": [
     {
       "apiVersion": "2019-09-01",
       "type": "Microsoft.Network/networkSecurityGroups",
-      "name": "MasterNsg",
-      "location": "[parameters('location')]",
+      "name": "[concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Nsg')]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
       "tags": {
-        "name": "MasterNsg"
+        "name": "[concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Nsg')]"
+      },
+      "copy": {
+        "name": "masterVirtualMachineNetworkSecurityGroupsCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
       },
       "properties": {
         "securityRules": [
@@ -140,7 +165,7 @@
               "protocol": "Tcp",
               "access": "Allow",
               "direction": "Inbound",
-              "sourceAddressPrefixes": "[parameters('allowedAddresses')]",
+              "sourceAddressPrefix": "[parameters('allowedAddress')]",
               "sourcePortRange": "*",
               "destinationAddressPrefix": "*",
               "destinationPortRange": "3389"
@@ -157,8 +182,8 @@
               "copy": [
                 {
                   "name": "sourceAddressPrefixes",
-                  "count": "[length(parameters('virtualMachines'))]",
-                  "input": "[if(not(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].isMaster), reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].vmName, 'Ip')), '2019-09-01').ipAddress, json('null'))]"
+                  "count": "[length(parameters('slaveNodes').locations)]",
+                  "input": "[reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex('sourceAddressPrefixes')].nameSuffix, 'Ip')), '2019-09-01').ipAddress]"
                 }
               ],
               "sourcePortRange": "*",
@@ -177,8 +202,8 @@
               "copy": [
                 {
                   "name": "sourceAddressPrefixes",
-                  "count": "[length(parameters('virtualMachines'))]",
-                  "input": "[if(not(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].isMaster), reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].vmName, 'Ip')), '2019-09-01').ipAddress, json('null'))]"
+                  "count": "[length(parameters('slaveNodes').locations)]",
+                  "input": "[reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex('sourceAddressPrefixes')].nameSuffix, 'Ip')), '2019-09-01').ipAddress]"
                 }
               ],
               "sourcePortRange": "*",
@@ -192,10 +217,14 @@
     {
       "apiVersion": "2019-09-01",
       "type": "Microsoft.Network/networkSecurityGroups",
-      "name": "SlaveNsg",
-      "location": "[parameters('location')]",
+      "name": "[concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix, 'Nsg')]",
+      "location": "[parameters('slaveNodes').locations[copyIndex()].region]",
       "tags": {
-        "name": "SlaveNsg"
+        "name": "[concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix, 'Nsg')]"
+      },
+      "copy": {
+        "name": "slaveVirtualMachineNetworkSecurityGroupsCopy",
+        "count": "[length(parameters('slaveNodes').locations)]"
       },
       "properties": {
         "securityRules": [
@@ -207,7 +236,7 @@
               "protocol": "Tcp",
               "access": "Allow",
               "direction": "Inbound",
-              "sourceAddressPrefixes": "[parameters('allowedAddresses')]",
+              "sourceAddressPrefix": "[parameters('allowedAddress')]",
               "sourcePortRange": "*",
               "destinationAddressPrefix": "*",
               "destinationPortRange": "3389"
@@ -224,8 +253,8 @@
               "copy": [
                 {
                   "name": "sourceAddressPrefixes",
-                  "count": "[length(parameters('virtualMachines'))]",
-                  "input": "[if(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].isMaster, reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].vmName, 'Ip')), '2019-09-01').ipAddress, json('null'))]"
+                  "count": "[length(parameters('masterNodes').locations)]",
+                  "input": "[reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex('sourceAddressPrefixes')].nameSuffix, 'Ip')), '2019-09-01').ipAddress]"
                 }
               ],
               "sourcePortRange": "*",
@@ -241,12 +270,11 @@
               "protocol": "Tcp",
               "access": "Allow",
               "direction": "Inbound",
-              "sourceAddressPrefix": "*",
               "copy": [
                 {
                   "name": "sourceAddressPrefixes",
-                  "count": "[length(parameters('virtualMachines'))]",
-                  "input": "[if(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].isMaster, reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex('sourceAddressPrefixes')].vmName, 'Ip')), '2019-09-01').ipAddress, json('null'))]"
+                  "count": "[length(parameters('masterNodes').locations)]",
+                  "input": "[reference(resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex('sourceAddressPrefixes')].nameSuffix, 'Ip')), '2019-09-01').ipAddress]"
                 }
               ],
               "sourcePortRange": "*",
@@ -260,10 +288,14 @@
     {
       "apiVersion": "2019-09-01",
       "type": "Microsoft.Network/networkSecurityGroups",
-      "name": "BastionNsg",
-      "location": "[parameters('location')]",
+      "name": "[concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Nsg')]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
       "tags": {
-        "name": "BastionNsg"
+        "name": "[concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Nsg')]"
+      },
+      "copy": {
+        "name": "masterBastionNetworkSecurityGroupsCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
       },
       "properties": {
         "securityRules": [
@@ -445,37 +477,16 @@
       ]
     },
     {
-      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
       "apiVersion": "2019-09-01",
       "type": "Microsoft.Network/publicIPAddresses",
-      "name": "[concat(parameters('virtualMachines')[copyIndex()].vmName, 'Ip')]",
-      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "name": "[concat(concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix), 'Ip')]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
       "tags": {
-        "name": "[parameters('virtualMachines')[copyIndex()].vmName]"
+        "name": "[concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix)]"
       },
       "copy": {
-        "name": "vmPublicIPAddressesCopy",
-        "count": "[variables('length')]"
-      },
-      "properties": {
-        "publicIPAllocationMethod": "Dynamic",
-        "dnsSettings": {
-          "domainNameLabel": "[concat(toLower(parameters('virtualMachines')[copyIndex()].vmName), uniquestring(resourceGroup().id))]"
-        }
-      }
-    },
-    {
-      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
-      "apiVersion": "2019-09-01",
-      "type": "Microsoft.Network/publicIPAddresses",
-      "name": "[concat(parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName, 'Ip')]",
-      "location": "[parameters('virtualMachines')[copyIndex()].location]",
-      "tags": {
-        "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName]"
-      },
-      "copy": {
-        "name": "bastionPublicIPAddressesCopy",
-        "count": "[variables('length')]"
+        "name": "masterPublicIPAddressesCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
       },
       "sku": {
         "name": "Standard"
@@ -485,31 +496,69 @@
       }
     },
     {
-      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
-      "type": "Microsoft.Network/bastionHosts",
       "apiVersion": "2019-09-01",
-      "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName]",
-      "location": "[resourceGroup().location]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[concat(concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix), 'Ip')]",
+      "location": "[parameters('slaveNodes').locations[copyIndex()].region]",
       "tags": {
-        "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName]"
+        "name": "[concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix)]"
       },
       "copy": {
-        "name": "bastionHostsCopy",
-        "count": "[variables('length')]"
+        "name": "slavePublicIPAddressesCopy",
+        "count": "[length(parameters('slaveNodes').locations)]"
+      },
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+    },
+    {
+      "apiVersion": "2019-09-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Ip')]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
+      "tags": {
+        "name": "[concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Ip')]"
+      },
+      "copy": {
+        "name": "masterBastionPublicIPAddressesCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
+      },
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+    },
+    {
+      "type": "Microsoft.Network/bastionHosts",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix)]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
+      "tags": {
+        "name": "[concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix)]"
+      },
+      "copy": {
+        "name": "masterBastionHostsCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
       },
       "dependsOn": [
-        "bastionPublicIPAddressesCopy"
+        "masterBastionPublicIPAddressesCopy",
+        "masterVirtualNetworksCopy"
       ],
       "properties": {
         "ipConfigurations": [
           {
-            "name": "[concat(parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName, 'IpConfiguration')]",
+            "name": "[concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'IpConfiguration')]",
             "properties": {
               "subnet": {
-                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetwork').name, 'AzureBastionSubnet')]"
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', concat(parameters('virtualNetwork').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix), 'AzureBastionSubnet')]"
               },
               "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIpAddresses', concat(parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName, 'Ip'))]"
+                "id": "[resourceId('Microsoft.Network/publicIpAddresses', concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Ip'))]"
               }
             }
           }
@@ -517,20 +566,20 @@
       }
     },
     {
-      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
       "type": "Microsoft.Network/bastionHosts/providers/diagnosticsettings",
-      "name": "[concat(parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName, '/Microsoft.Insights/service')]",
+      "name": "[concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, '/Microsoft.Insights/service')]",
       "apiVersion": "2016-09-01",
       "location": "[resourceGroup().location]",
       "tags": {
-        "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionName]"
+        "name": "[concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix)]"
       },
       "copy": {
         "name": "bastionHostDiagnosticSettingsCopy",
-        "count": "[variables('length')]"
+        "count": "[length(parameters('masterNodes').locations)]"
       },
       "dependsOn": [
-        "[variables('workspaceId')]"
+        "[variables('workspaceId')]",
+        "masterBastionHostsCopy"
       ],
       "properties": {
         "workspaceId": "[variables('workspaceId')]",
@@ -547,66 +596,90 @@
       }
     },
     {
-      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
       "apiVersion": "2019-09-01",
       "type": "Microsoft.Network/virtualNetworks",
-      "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.name]",
-      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "name": "[concat(parameters('virtualNetwork').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix)]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
       "copy": {
-        "name": "virtualNetworksCopy",
-        "count": "[variables('length')]"
+        "name": "masterVirtualNetworksCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Network/networkSecurityGroups', 'MasterNsg')]",
-        "[resourceId('Microsoft.Network/networkSecurityGroups', 'SlaveNsg')]",
-        "[resourceId('Microsoft.Network/networkSecurityGroups', 'BastionNsg')]"
+        "masterVirtualMachineNetworkSecurityGroupsCopy",
+        "masterBastionNetworkSecurityGroupsCopy"
       ],
       "properties": {
         "addressSpace": {
-          "addressPrefixes": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.addressPrefixes]"
+          "addressPrefixes": "[parameters('virtualNetwork').addressPrefixes]"
         },
         "subnets": [
           {
-            "name": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.subnetName]",
+            "name": "[concat(parameters('virtualNetwork').subnetPrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix)]",
             "properties": {
-              "addressPrefix": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.subnetAddressPrefix]",
+              "addressPrefix": "[parameters('virtualNetwork').subnetAddressPrefix]",
               "networkSecurityGroup": {
-                "id": "[if(parameters('virtualMachines').isMaster, variables('masterNsgId'), variables('slaveNsgId'))]"
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Nsg'))]"
               }
             }
           },
           {
             "name": "AzureBastionSubnet",
             "properties": {
-              "addressPrefix": "[parameters('virtualMachines')[copyIndex()].virtualNetwork.bastionAddressPrefix]",
+              "addressPrefix": "[parameters('bastion').subnetAddressPrefix]",
               "networkSecurityGroup": {
-                "id": "[variables('bastionNsgId')]"
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(parameters('bastion').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Nsg'))]"
               }
-            },
-            "type": "Microsoft.Network/virtualNetworks/subnets"
+            }
           }
         ]
       }
     },
     {
-      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
-      "apiVersion": "2018-08-01",
-      "type": "Microsoft.Network/networkInterfaces",
-      "name": "[concat(parameters('virtualMachines')[copyIndex()].vmName, 'Nic')]",
-      "location": "[parameters('virtualMachines')[copyIndex()].location]",
-      "tags": {
-        "name": "[parameters('virtualMachines')[copyIndex()].vmName]"
-      },
+      "apiVersion": "2019-09-01",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[concat(parameters('virtualNetwork').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix)]",
+      "location": "[parameters('slaveNodes').locations[copyIndex()].region]",
       "copy": {
-        "name": "networkInterfacesCopy",
-        "count": "[variables('length')]"
+        "name": "slaveVirtualNetworksCopy",
+        "count": "[length(parameters('slaveNodes').locations)]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex()].vmName, 'Ip'))]",
-        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualMachines')[copyIndex()].virtualNetwork.name)]",
-        "[variables('masterNsgId')]",
-        "[variables('slaveNsgId')]",
-        "[variables('bastionNsgId')]"
+        "slaveVirtualMachineNetworkSecurityGroupsCopy"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": "[parameters('virtualNetwork').addressPrefixes]"
+        },
+        "subnets": [
+          {
+            "name": "[concat(parameters('virtualNetwork').subnetPrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix)]",
+            "properties": {
+              "addressPrefix": "[parameters('virtualNetwork').subnetAddressPrefix]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix, 'Nsg'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Nic')]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
+      "tags": {
+        "name": "[concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Nic')]"
+      },
+      "copy": {
+        "name": "masterNetworkInterfacesCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
+      },
+      "dependsOn": [
+        "masterPublicIPAddressesCopy",
+        "masterVirtualNetworksCopy",
+        "masterVirtualMachineNetworkSecurityGroupsCopy",
+        "masterBastionNetworkSecurityGroupsCopy"
       ],
       "properties": {
         "ipConfigurations": [
@@ -615,41 +688,77 @@
             "properties": {
               "privateIPAllocationMethod": "Dynamic",
               "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('virtualMachines')[copyIndex()].vmName, 'Ip'))]"
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Ip'))]"
               },
               "subnet": {
-                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualMachines')[copyIndex()].virtualNetwork.name, parameters('virtualMachines')[copyIndex()].virtualNetwork.subnetName)]"
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', concat(parameters('virtualNetwork').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix), concat(parameters('virtualNetwork').subnetPrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix))]"
               }
             }
           }
         ],
         "networkSecurityGroup": {
-          "id": "[if(parameters('virtualMachines').isMaster, variables('masterNsgId'), variables('slaveNsgId'))]"
+          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Nsg'))]"
         }
       }
     },
     {
-      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
-      "apiVersion": "2019-07-01",
-      "type": "Microsoft.Compute/virtualMachines",
-      "name": "[parameters('virtualMachines')[copyIndex()].vmName]",
-      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix, 'Nic')]",
+      "location": "[parameters('slaveNodes').locations[copyIndex()].region]",
+      "tags": {
+        "name": "[concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix, 'Nic')]"
+      },
       "copy": {
-        "name": "virtualMachinesCopy",
-        "count": "[variables('length')]"
+        "name": "slaveNetworkInterfacesCopy",
+        "count": "[length(parameters('slaveNodes').locations)]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('virtualMachines')[copyIndex()].vmName, 'Nic'))]"
+        "slavePublicIPAddressesCopy",
+        "slaveVirtualNetworksCopy",
+        "slaveVirtualMachineNetworkSecurityGroupsCopy"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "VmIpConfiguration",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix, 'Ip'))]"
+              },
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', concat(parameters('virtualNetwork').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix), concat(parameters('virtualNetwork').subnetPrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix))]"
+              }
+            }
+          }
+        ],
+        "networkSecurityGroup": {
+          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix, 'Nsg'))]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2019-07-01",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix)]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
+      "copy": {
+        "name": "masterVirtualMachinesCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, 'Nic'))]"
       ],
       "tags": {
-        "name": "[parameters('virtualMachines')[copyIndex()].vmName]"
+        "name": "[concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix)]"
       },
       "properties": {
         "hardwareProfile": {
           "vmSize": "[parameters('vmSize')]"
         },
         "osProfile": {
-          "computerName": "[parameters('virtualMachines')[copyIndex()].vmName]",
+          "computerName": "[concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix)]",
           "adminUsername": "[parameters('adminUsername')]",
           "adminPassword": "[parameters('adminPassword')]",
           "windowsConfiguration": {
@@ -673,7 +782,7 @@
         "networkProfile": {
           "networkInterfaces": [
             {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('virtualMachines')[copyIndex()].vmName, 'Nic'))]"
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix), 'Nic'))]"
             }
           ]
         }
@@ -682,17 +791,68 @@
       ]
     },
     {
-      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
-      "apiVersion": "2019-03-01",
-      "type": "Microsoft.Compute/virtualMachines/extensions",
-      "name": "[concat(parameters('virtualMachines')[copyIndex()].vmName, '/MicrosoftMonitoringAgent')]",
-      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "apiVersion": "2019-07-01",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix)]",
+      "location": "[parameters('slaveNodes').locations[copyIndex()].region]",
       "copy": {
-        "name": "microsoftMonitoringAgentCopy",
-        "count": "[variables('length')]"
+        "name": "slaveVirtualMachinesCopy",
+        "count": "[length(parameters('slaveNodes').locations)]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachines')[copyIndex()].vmName)]"
+        "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix, 'Nic'))]"
+      ],
+      "tags": {
+        "name": "[concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix)]"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix)]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "provisionVmAgent": "true",
+            "enableAutomaticUpdates": "true"
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[parameters('vmImagePublisher')]",
+            "offer": "[parameters('vmImageOffer')]",
+            "sku": "[parameters('vmImageSku')]",
+            "version": "[parameters('vmImageVersion')]"
+          },
+          "osDisk": {
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix), 'Nic'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+      ]
+    },
+    {
+      "apiVersion": "2019-03-01",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix), '/MicrosoftMonitoringAgent')]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
+      "copy": {
+        "name": "masterMicrosoftMonitoringAgentCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix))]"
       ],
       "properties": {
         "publisher": "Microsoft.EnterpriseCloud.Monitoring",
@@ -708,17 +868,41 @@
       }
     },
     {
-      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
       "apiVersion": "2019-03-01",
       "type": "Microsoft.Compute/virtualMachines/extensions",
-      "name": "[concat(parameters('virtualMachines')[copyIndex()].vmName, '/DependencyAgent')]",
-      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "name": "[concat(concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix), '/MicrosoftMonitoringAgent')]",
+      "location": "[parameters('slaveNodes').locations[copyIndex()].region]",
       "copy": {
-        "name": "dependencyAgentCopy",
-        "count": "[variables('length')]"
+        "name": "slaveMicrosoftMonitoringAgentCopy",
+        "count": "[length(parameters('slaveNodes').locations)]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachines')[copyIndex()].vmName)]"
+        "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix))]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.EnterpriseCloud.Monitoring",
+        "type": "MicrosoftMonitoringAgent",
+        "typeHandlerVersion": "1.0",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "workspaceId": "[reference(variables('workspaceId'), '2017-03-15-preview').customerId]"
+        },
+        "protectedSettings": {
+          "workspaceKey": "[listKeys(variables('workspaceId'), '2017-03-15-preview').primarySharedKey]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2019-03-01",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix), '/DependencyAgent')]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
+      "copy": {
+        "name": "masterDependencyAgentCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix))]"
       ],
       "properties": {
         "publisher": "Microsoft.Azure.Monitoring.DependencyAgent",
@@ -732,17 +916,39 @@
       }
     },
     {
-      "condition": "[parameters('virtualMachines')[copyIndex()].deploy]",
       "apiVersion": "2019-03-01",
       "type": "Microsoft.Compute/virtualMachines/extensions",
-      "name": "[concat(parameters('virtualMachines')[copyIndex()].vmName, '/InstallJMeter')]",
-      "location": "[parameters('virtualMachines')[copyIndex()].location]",
+      "name": "[concat(concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix), '/DependencyAgent')]",
+      "location": "[parameters('slaveNodes').locations[copyIndex()].region]",
       "copy": {
-        "name": "customScriptExtensionCopy",
-        "count": "[variables('length')]"
+        "name": "slaveDependencyAgentCopy",
+        "count": "[length(parameters('slaveNodes').locations)]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachines')[copyIndex()].vmName)]"
+        "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix))]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Azure.Monitoring.DependencyAgent",
+        "type": "DependencyAgentWindows",
+        "typeHandlerVersion": "9.4",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+        },
+        "protectedSettings": {
+        }
+      }
+    },
+    {
+      "apiVersion": "2019-03-01",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix, '/InstallJMeter')]",
+      "location": "[parameters('masterNodes').locations[copyIndex()].region]",
+      "copy": {
+        "name": "masterCustomScriptExtensionCopy",
+        "count": "[length(parameters('masterNodes').locations)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('masterNodes').namePrefix, parameters('masterNodes').locations[copyIndex()].nameSuffix))]"
       ],
       "properties": {
         "publisher": "Microsoft.Compute",
@@ -751,11 +957,38 @@
         "autoUpgradeMinorVersion": true,
         "settings": {
           "fileUris": [
-            "[if(parameters('virtualMachines')[copyIndex()].isMaster, concat(parameters('masterScriptFilePath'), '/', parameters('masterScriptFileName')), concat(parameters('slaveScriptFilePath'), '/', parameters('slaveScriptFileName')))]"
+            "[concat(parameters('masterScriptFilePath'), '/', parameters('masterScriptFileName'))]"
           ]
         },
         "protectedSettings": {
-          "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File ', if(parameters('virtualMachines')[copyIndex()].isMaster, parameters('masterScriptFileName'), parameters('slaveScriptFileName')))]"
+          "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File ', parameters('masterScriptFileName'))]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2019-03-01",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix, '/InstallJMeter')]",
+      "location": "[parameters('slaveNodes').locations[copyIndex()].region]",
+      "copy": {
+        "name": "slaveCustomScriptExtensionCopy",
+        "count": "[length(parameters('slaveNodes').locations)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('slaveNodes').namePrefix, parameters('slaveNodes').locations[copyIndex()].nameSuffix))]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Compute",
+        "type": "CustomScriptExtension",
+        "typeHandlerVersion": "1.9",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "fileUris": [
+            "[concat(parameters('slaveScriptFilePath'), '/', parameters('slaveScriptFileName'))]"
+          ]
+        },
+        "protectedSettings": {
+          "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File ', parameters('slaveScriptFileName'))]"
         }
       }
     }
