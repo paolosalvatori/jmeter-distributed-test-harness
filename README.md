@@ -58,7 +58,7 @@ You can also use the **run.ps1** PowerShell script to run tests on the master no
 
 This script allows to save JMeter logs, results and dashboard on the local file system.
 
-![JMeter Dashboard](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/JMeterDashboard.png)
+![JMeter Dashboard](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/Dashboard.png)
 
 You can use **Windows PowerShell** or **Windows PowerShell ISE** to run commands. For example, the following command:
 
