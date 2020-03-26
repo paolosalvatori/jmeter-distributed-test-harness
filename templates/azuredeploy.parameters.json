@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.1",
   "parameters": {
     "allowedAddress": {
-      "value": "93.34.128.248"
+      "value": "*"
     },
     "location": {
       "value": "West Europe"
