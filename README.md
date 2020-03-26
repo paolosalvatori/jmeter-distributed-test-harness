@@ -83,8 +83,8 @@ This topology has the following advantages over a topology that uses private IP 
 
 - Reduced complexity 
 - Lower total cost of ownership (TCO)
-- Extensibility
+- Extensibility to other cloud platforms.
 
-As an example of extensibility, you can provision slave nodes on other cloud platforms. I personally tested this possibility by provisioning additional slave nodes on AWS.
+As an example of extensibility, you can provision slave nodes on other cloud platforms like AWS or GCP. I personally tested this possibility by provisioning additional slave nodes on AWS.
 
 Last but not least, the ARM template can be easily changed to replace **virtual machines** with **virtual machine scale sets** (VMSS).
