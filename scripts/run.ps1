@@ -7,8 +7,17 @@ Param (
     [Parameter(Position=5)][ValidateRange(1, [int]::MaxValue)][int]$NumThreads = 20,
     [Parameter(Position=6)][ValidateRange(1, [int]::MaxValue)][int]$Duration = 600,
     [Parameter(Position=7)][ValidateRange(1, [int]::MaxValue)][int]$WarmupTime = 30,
-    [Parameter(Position=8)][bool]$UseAuthentication = $false,
-    [Parameter(Position=9)][bool]$LogParameters = $true
+    [Parameter(Position=8)][ValidateSet("Standard", `
+                                        "Hold", `
+                                        "DiskStore", `
+                                        "StrippedDiskStore", `
+                                        "Batch", "Statistical", `
+                                        "Stripped", `
+                                        "StrippedBatch", `
+                                        "Asynch", `
+                                        "StrippedAsynch")][string]$Mode = "Standard",
+    [Parameter(Position=9)][bool]$UseAuthentication = $false,
+    [Parameter(Position=10)][bool]$LogParameters = $true
 )
 
 if ($LogParameters -eq $true)
@@ -17,15 +26,16 @@ if ($LogParameters -eq $true)
     Write-Host $line
     Write-Host "Parameters"
     Write-Host $line
-    Write-Host 'jMeterTest:' $JMeterTest
-    Write-Host 'keyVaultResourceGroupName:' $KeyVaultResourceGroupName
-    Write-Host 'keyVaultName:' $KeyVaultName
-    Write-Host 'tenantName:' $TenantName
-    Write-Host 'remote:' $Remote
-    Write-Host 'useAuthentication:' $UseAuthentication
-    Write-Host 'numThreads:' $NumThreads
-    Write-Host 'warmupTime:' $WarmupTime
-    Write-Host 'duration:' $Duration
+    Write-Host 'JMeterTest:' $JMeterTest
+    Write-Host 'KeyVaultResourceGroupName:' $KeyVaultResourceGroupName
+    Write-Host 'KeyVaultName:' $KeyVaultName
+    Write-Host 'TenantName:' $TenantName
+    Write-Host 'Remote:' $Remote
+    Write-Host 'NumThreads:' $NumThreads
+    Write-Host 'WarmupTime:' $WarmupTime
+    Write-Host 'Duration:' $Duration
+    Write-Host 'Mode:' $Mode
+    Write-Host 'UseAuthentication:' $UseAuthentication
     Write-Host $line
 }
 
@@ -112,7 +122,7 @@ if($UseAuthentication) {
 # Define the common part of the JMeter command
 $jMeterFolder = (Get-ChildItem Env:JMETER_HOME).Value
 $jMeterPath = "$jMeterFolder\bin\jmeter"
-$parameters = @("-n", "-t", "`"$JMeterTest`"", "-l", "`"$testRunResultsFolderName\resultfile.jtl`"", "-e", "-o", "`"$testRunOutputFolderName`"", "-j", "`"$testRunLogsFolderName\jmeter.jtl`"", "-Jmode=Standard")
+$parameters = @("-n", "-t", "`"$JMeterTest`"", "-l", "`"$testRunResultsFolderName\resultfile.jtl`"", "-e", "-o", "`"$testRunOutputFolderName`"", "-j", "`"$testRunLogsFolderName\jmeter.jtl`"", "-Jmode=$Mode")
 
 if (![System.String]::IsNullOrWhiteSpace($Remote)) {
     # Set general parameters
