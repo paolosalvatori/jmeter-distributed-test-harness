@@ -21,14 +21,14 @@ JMeter master and slave nodes expose a Public IP using the [Java Remote Method I
 ![Master NSG](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/MasterNSG.png)
 
 At point 1 you can note that the access via RDP is allowed only from a given public IP. You can restrict the RDP access to master and slave nodes by specifing a public IP as value of the **allowedAddress** parameter in the **azuredeploy.parameters.json** file.
-At point 2 and 3 you can see that the access to ports **1099** and **4000-4002** used by JMeter on the master node is retricted to the public IPs of the slave nodes.
+At point 2 and 3 you can see that the access to ports **1099** and **4000-4002** used by JMeter on the master node is restricted to the public IPs of the slave nodes.
 
  The following picture shows the Network Security Group of the slave node. 
 
 ![Slave NSG](https://raw.githubusercontent.com/paolosalvatori/jmeter-distributed-test-harness/master/images/SlaveNSG.png)
 
 At point 1 you can note that the access via RDP is allowed only from a given public IP. You can restrict the RDP access to master and slave nodes by specifing a public IP as value of the **allowedAddress** parameter in the **azuredeploy.parameters.json** file.
-At point 2 and 3 you can see that the access to ports **1099** and **4000-4002** used by JMeter on the master node is retricted to the public IPs of the master node.
+At point 2 and 3 you can see that the access to ports **1099** and **4000-4002** used by JMeter on the master node is restricted to the public IPs of the master node.
  
 You can connect to master and slave nodes via RDP on port 3389. In addition, you can connect to the JMeter master virtual machine via [Azure Bastion](https://docs.microsoft.com/en-us/azure/bastion/bastion-overview) which provides secure and seamless RDP/SSH connectivity to your virtual machines directly in the Azure portal over SSL. You can customize the ARM template to disable the access to virtual machines via RDP by eliminating the corresponding rule in the Network Security Groups or you can eliminate Azure Bastion if you don't want to use this access type. 
  
